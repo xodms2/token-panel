@@ -1,0 +1,6 @@
+{
+  "name": "token-panel",
+  "owner": { "name": "xodms2" },
+  "description": "Token panel: plan limits, context and prompt-cache countdown above the Claude Code prompt",
+  "plugins": [{ "name": "token-panel", "source": "./" }]
+}

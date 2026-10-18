@@ -1,0 +1,7 @@
+{
+  "name": "token-panel",
+  "version": "1.0.0",
+  "description": "A line above the prompt with plan limits, context size and a live prompt-cache countdown; Keep warm, Handoff, and docs updated before /compact",
+  "author": { "name": "xodms2" },
+  "types": "./types/index.d.ts"
+}

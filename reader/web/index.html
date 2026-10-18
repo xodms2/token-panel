@@ -1,0 +1,362 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Token Dashboard</title>
+<style>
+:root {
+  color-scheme: light;
+  --bg: #f4f4f2; --surface-1: #fcfcfb; --border: #e3e2de;
+  --text-primary: #0b0b0b; --text-secondary: #52514e; --text-muted: #7b7a75;
+  --grid: #ecebe7;
+  --s-input: #2a78d6; --s-write: #eb6834; --s-read: #1baf7a; --s-output: #eda100;
+  --good: #0ca30c; --warning: #fab219; --critical: #d03b3b;
+}
+@media (prefers-color-scheme: dark) {
+  :root:where(:not([data-theme="light"])) {
+    color-scheme: dark;
+    --bg: #121211; --surface-1: #1a1a19; --border: #2c2c2a;
+    --text-primary: #f0efec; --text-secondary: #c3c2b7; --text-muted: #8f8e86;
+    --grid: #262624;
+    --s-input: #3987e5; --s-write: #d95926; --s-read: #199e70; --s-output: #c98500;
+  }
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --bg: #121211; --surface-1: #1a1a19; --border: #2c2c2a;
+  --text-primary: #f0efec; --text-secondary: #c3c2b7; --text-muted: #8f8e86;
+  --grid: #262624;
+  --s-input: #3987e5; --s-write: #d95926; --s-read: #199e70; --s-output: #c98500;
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--text-primary);
+  font: 14px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif; }
+main { max-width: 1280px; margin: 0 auto; padding: 20px 16px 48px; }
+header { display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px 16px; margin-bottom: 16px; }
+h1 { font-size: 20px; margin: 0; }
+h2 { font-size: 15px; margin: 0 0 12px; }
+.muted { color: var(--text-muted); }
+.sec { color: var(--text-secondary); }
+.card { background: var(--surface-1); border: 1px solid var(--border); border-radius: 10px; padding: 16px; margin-bottom: 16px; }
+.tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 12px; margin-bottom: 16px; }
+.tile { background: var(--surface-1); border: 1px solid var(--border); border-radius: 10px; padding: 12px 14px; }
+.tile .k { font-size: 12px; color: var(--text-secondary); }
+.tile .v { font-size: 24px; font-weight: 600; font-variant-numeric: tabular-nums; margin-top: 2px; }
+.tile .s { font-size: 12px; color: var(--text-muted); }
+.filters { display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: center; margin-bottom: 12px; }
+select, input[type=search] { font: inherit; color: inherit; background: var(--surface-1); border: 1px solid var(--border); border-radius: 6px; padding: 5px 8px; }
+label.chk { display: inline-flex; gap: 6px; align-items: center; color: var(--text-secondary); }
+.tablewrap { overflow-x: auto; }
+table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
+th, td { text-align: left; padding: 7px 8px; border-bottom: 1px solid var(--grid); white-space: nowrap; vertical-align: middle; }
+th { font-size: 12px; font-weight: 600; color: var(--text-secondary); cursor: pointer; user-select: none; }
+th.num, td.num { text-align: right; }
+th[data-dir="asc"]::after { content: " ▲"; } th[data-dir="desc"]::after { content: " ▼"; }
+td.title { white-space: normal; min-width: 220px; max-width: 360px; }
+td.title .t { font-weight: 500; }
+td.title .p { font-size: 12px; color: var(--text-muted); }
+tr.sel td { background: color-mix(in srgb, var(--s-input) 8%, transparent); }
+.badge { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; padding: 2px 8px; border-radius: 999px; border: 1px solid var(--border); }
+.dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+.mix { display: flex; height: 10px; width: 140px; gap: 2px; }
+.mix span { display: block; height: 100%; min-width: 0; }
+.mix span:first-child { border-radius: 4px 0 0 4px; } .mix span:last-child { border-radius: 0 4px 4px 0; }
+.legend { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 12px; color: var(--text-secondary); margin-bottom: 10px; }
+.legend i { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 5px; vertical-align: -1px; }
+#chart { width: 100%; height: 200px; display: block; }
+#chart .bar { fill: var(--s-input); }
+#chart .bar:hover, #chart .bar.hl { fill: var(--s-write); }
+#chart text { fill: var(--text-muted); font-size: 11px; }
+#chart line { stroke: var(--grid); }
+#tip { position: fixed; pointer-events: none; background: var(--surface-1); color: var(--text-primary); border: 1px solid var(--border); border-radius: 6px; padding: 6px 8px; font-size: 12px; box-shadow: 0 4px 14px rgba(0,0,0,.15); display: none; z-index: 10; }
+.note { font-size: 12px; color: var(--text-muted); margin-top: 8px; }
+.progress { height: 4px; background: var(--grid); border-radius: 2px; overflow: hidden; width: 200px; display: inline-block; vertical-align: middle; }
+.progress div { height: 100%; background: var(--s-input); }
+.grid2 { display: grid; grid-template-columns: minmax(0, 1fr); gap: 16px; }
+@media (min-width: 980px) { .grid2 { grid-template-columns: minmax(0, 3fr) minmax(0, 2fr); } }
+.grid2 > .card { margin-bottom: 0; }
+.detail dl { display: grid; grid-template-columns: auto 1fr; gap: 4px 14px; margin: 0; font-variant-numeric: tabular-nums; }
+.detail dt { color: var(--text-secondary); }
+.detail dd { margin: 0; min-width: 0; overflow-wrap: anywhere; }
+.detail dt { white-space: nowrap; }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <h1>Token Dashboard</h1>
+    <span class="muted" id="status">Loading…</span>
+  </header>
+
+  <div class="tiles" id="tiles"></div>
+
+  <div class="grid2" style="margin-bottom:16px">
+    <div class="card">
+      <h2>Spend per day <span class="muted" style="font-weight:400" id="chartScope"></span></h2>
+      <svg id="chart" role="img" aria-label="Spend per day, last 30 days"></svg>
+    </div>
+    <div class="card detail" id="detail">
+      <h2>Selected tab</h2>
+      <p class="muted">Click a row in the tabs table.</p>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>Projects (workspaces)</h2>
+    <div class="legend">
+      <span><i style="background:var(--s-input)"></i>Input</span>
+      <span><i style="background:var(--s-write)"></i>Cache write</span>
+      <span><i style="background:var(--s-read)"></i>Cache read</span>
+      <span><i style="background:var(--s-output)"></i>Output</span>
+    </div>
+    <div class="tablewrap"><table id="projects"></table></div>
+  </div>
+
+  <div class="card">
+    <h2>Tabs (sessions)</h2>
+    <div class="filters">
+      <select id="fProject"><option value="">All projects</option></select>
+      <select id="fRange">
+        <option value="all">All time</option>
+        <option value="1">Active in last 24 h</option>
+        <option value="7">Active in last 7 days</option>
+        <option value="30">Active in last 30 days</option>
+      </select>
+      <input type="search" id="fSearch" placeholder="Search titles">
+      <label class="chk"><input type="checkbox" id="fLive"> Cache alive only</label>
+      <label class="chk">Oversized above
+        <select id="fLimit">
+          <option value="100000">100k</option><option value="150000">150k</option>
+          <option value="200000" selected>200k</option><option value="300000">300k</option>
+          <option value="500000">500k</option>
+        </select></label>
+      <label class="chk"><input type="checkbox" id="fBig"> Oversized only</label>
+    </div>
+    <div class="tablewrap"><table id="sessions"></table></div>
+    <p class="note">
+      Cost is at Anthropic API list prices (what the same tokens would cost on the API); a Pro/Max plan is not billed this way.
+      <b>Reread</b> is what the next message pays to read the whole conversation back in:
+      <b>warm</b> while the cache is alive (cache-read price), <b>cold</b> once it has expired (the whole context is written to the cache again, at 1.25× input for a 5-minute cache or 2× for a 1-hour one).
+      Cache life restarts on every message; it is counted from the last reply of the tab's main thread.
+      <b>Oversized</b> marks a tab whose context is past the limit you pick: every further message rereads all of it, so <code>/compact</code> or a fresh tab with a handoff note is cheaper from there.
+    </p>
+  </div>
+</main>
+<div id="tip"></div>
+
+<script>
+const $ = s => document.querySelector(s);
+let DATA = null, offset = 0, selected = null;
+let sortS = { key: "last_ts", dir: "desc" }, sortP = { key: "cost", dir: "desc" };
+
+const fmtUSD = v => v >= 100 ? "$" + v.toFixed(0) : v >= 1 ? "$" + v.toFixed(2) : v >= 0.01 ? "$" + v.toFixed(3) : v > 0 ? "<$0.01" : "$0";
+const fmtTok = v => v >= 1e9 ? (v/1e9).toFixed(2) + "B" : v >= 1e6 ? (v/1e6).toFixed(1) + "M" : v >= 1e3 ? (v/1e3).toFixed(1) + "k" : String(v);
+const fmtAgo = s => s < 60 ? Math.floor(s) + "s ago" : s < 3600 ? Math.floor(s/60) + "m ago" : s < 86400 ? Math.floor(s/3600) + "h ago" : Math.floor(s/86400) + "d ago";
+const fmtLeft = s => { s = Math.max(0, Math.floor(s)); const m = Math.floor(s/60), r = s % 60; return m + ":" + String(r).padStart(2, "0"); };
+const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const now = () => Date.now()/1000 + offset;
+const total = s => s.inp + s.out + s.cr + s.cw5 + s.cw1h;
+const shortModel = m => (m || "").replace("claude-", "");
+const titleOf = s => s.title || s.first_prompt || s.id.slice(0, 8);
+const store = { get(k) { try { return localStorage.getItem(k); } catch { return null; } }, set(k, v) { try { localStorage.setItem(k, v); } catch {} } };
+if (store.get("limit")) $("#fLimit").value = store.get("limit");
+const limit = () => +$("#fLimit").value;
+const isBig = s => s.last_ctx > limit();
+const recent = s => s.last_ts && now() - s.last_ts < 7 * 86400;
+
+function cacheState(s) {
+  if (!s.last_ts) return { alive: false, left: 0 };
+  const left = s.last_ts + s.ttl_seconds - now();
+  return { alive: left > 0, left };
+}
+
+async function load() {
+  try {
+    const r = await fetch("/api/data", { cache: "no-store" });
+    DATA = await r.json();
+    offset = DATA.now - Date.now()/1000;
+    fillProjectFilter();
+    render();
+  } catch (e) { $("#status").textContent = "Server not reachable — is server.py running?"; }
+}
+
+function fillProjectFilter() {
+  const sel = $("#fProject"), cur = sel.value;
+  const labels = [...new Map(DATA.sessions.map(s => [s.project, s.project_label])).entries()].sort((a, b) => a[1].localeCompare(b[1]));
+  const want = '<option value="">All projects</option>' + labels.map(([k, l]) => `<option value="${esc(k)}">${esc(l)}</option>`).join("");
+  if (sel.dataset.sig !== want) { sel.innerHTML = want; sel.dataset.sig = want; sel.value = cur; }
+}
+
+function filtered() {
+  const p = $("#fProject").value, range = $("#fRange").value, q = $("#fSearch").value.toLowerCase(), live = $("#fLive").checked, big = $("#fBig").checked;
+  return DATA.sessions.filter(s =>
+    (!p || s.project === p) &&
+    (range === "all" || (s.last_ts && now() - s.last_ts < range * 86400)) &&
+    (!q || titleOf(s).toLowerCase().includes(q) || s.project_label.toLowerCase().includes(q)) &&
+    (!live || cacheState(s).alive) &&
+    (!big || isBig(s)));
+}
+
+function render() {
+  if (!DATA) return;
+  const st = $("#status");
+  if (DATA.scanning) {
+    const pct = DATA.scan_total ? Math.min(100, 100 * DATA.scan_done / DATA.scan_total) : 0;
+    st.innerHTML = `Reading logs for the first time… ${pct.toFixed(0)}% <span class="progress"><div style="width:${pct}%"></div></span>`;
+  } else st.textContent = `${DATA.sessions.length} tabs · refreshed ${fmtAgo(now() - DATA.last_scan)}`;
+  renderTiles(); renderChart(); renderProjects(); renderSessions(); renderDetail();
+}
+
+function renderTiles() {
+  const all = DATA.sessions, today = new Date().toLocaleDateString("sv");
+  const dayCost = d => all.reduce((a, s) => a + (s.days[d]?.[0] || 0), 0);
+  const last7 = [...Array(7)].map((_, i) => new Date(Date.now() - i*86400000).toLocaleDateString("sv"));
+  const c7 = last7.reduce((a, d) => a + dayCost(d), 0);
+  const cost = all.reduce((a, s) => a + s.cost, 0);
+  const tok = all.reduce((a, s) => a + total(s), 0);
+  const cr = all.reduce((a, s) => a + s.cr, 0), ins = all.reduce((a, s) => a + s.inp + s.cr + s.cw5 + s.cw1h, 0);
+  const live = all.filter(s => cacheState(s).alive);
+  const warm = live.reduce((a, s) => a + s.last_ctx, 0);
+  const tiles = [
+    ["Spent today", fmtUSD(dayCost(today)), fmtTok(all.reduce((a, s) => a + (s.days[today]?.[1] || 0), 0)) + " tokens"],
+    ["Last 7 days", fmtUSD(c7), ""],
+    ["All time", fmtUSD(cost), fmtTok(tok) + " tokens"],
+    ["Cache hit rate", ins ? (100 * cr / ins).toFixed(1) + "%" : "–", "of input tokens read from cache"],
+    ["Live caches", String(live.length), live.length ? fmtTok(warm) + " tokens warm" : "none warm right now"],
+    ["Oversized tabs", String(all.filter(s => isBig(s) && recent(s)).length), "active this week, over " + fmtTok(limit())],
+  ];
+  $("#tiles").innerHTML = tiles.map(([k, v, s]) => `<div class="tile"><div class="k">${k}</div><div class="v">${v}</div><div class="s">${s}</div></div>`).join("");
+}
+
+function renderChart() {
+  const svg = $("#chart"), W = svg.clientWidth || 600, H = 200, padL = 44, padB = 22, padT = 8;
+  const rows = filtered();
+  $("#chartScope").textContent = $("#fProject").value ? "· " + $("#fProject").selectedOptions[0].text : "· all projects";
+  const days = [...Array(30)].map((_, i) => new Date(Date.now() - (29 - i)*86400000).toLocaleDateString("sv"));
+  const vals = days.map(d => rows.reduce((a, s) => a + (s.days[d]?.[0] || 0), 0));
+  const toks = days.map(d => rows.reduce((a, s) => a + (s.days[d]?.[1] || 0), 0));
+  const max = Math.max(...vals, 0.01);
+  const step = niceStep(max), top = Math.ceil(max / step) * step;
+  const bw = (W - padL) / days.length, y = v => padT + (H - padT - padB) * (1 - v / top);
+  let g = "";
+  for (let v = 0; v <= top + 1e-9; v += step) g += `<line x1="${padL}" x2="${W}" y1="${y(v)}" y2="${y(v)}"/><text x="${padL - 6}" y="${y(v) + 4}" text-anchor="end">${fmtUSD(v)}</text>`;
+  days.forEach((d, i) => {
+    const x = padL + i * bw + 1, h = Math.max(0, y(0) - y(vals[i]));
+    if (vals[i] > 0) g += `<path class="bar" d="${roundTop(x, y(vals[i]), Math.max(1, bw - 2), h)}"/>`;
+    g += `<rect x="${padL + i*bw}" y="${padT}" width="${bw}" height="${H - padT - padB}" fill="transparent" data-i="${i}"/>`;
+    if ((29 - i) % 5 === 0) g += `<text x="${i === 29 ? x + bw : x + bw/2}" y="${H - 6}" text-anchor="${i === 29 ? "end" : "middle"}">${i === 29 ? "today" : d.slice(5)}</text>`;
+  });
+  svg.setAttribute("viewBox", `0 0 ${W} ${H}`);
+  svg.innerHTML = g;
+  svg.querySelectorAll("rect[data-i]").forEach(r => {
+    r.addEventListener("mousemove", e => { const i = +r.dataset.i; tip(e, `<b>${days[i]}</b><br>${fmtUSD(vals[i])} · ${fmtTok(toks[i])} tokens`); });
+    r.addEventListener("mouseleave", () => tip());
+  });
+}
+function niceStep(max) { const raw = max / 4, p = Math.pow(10, Math.floor(Math.log10(raw))); return [1, 2, 2.5, 5, 10].map(m => m * p).find(s => s >= raw); }
+function roundTop(x, y, w, h) { const r = Math.min(4, w/2, h); return `M${x},${y+h}V${y+r}Q${x},${y} ${x+r},${y}H${x+w-r}Q${x+w},${y} ${x+w},${y+r}V${y+h}Z`; }
+function tip(e, html) { const t = $("#tip"); if (!e) { t.style.display = "none"; return; } t.innerHTML = html; t.style.display = "block"; t.style.left = Math.min(e.clientX + 12, innerWidth - t.offsetWidth - 8) + "px"; t.style.top = (e.clientY + 12) + "px"; }
+
+function mixBar(s) {
+  const parts = [[s.inp, "--s-input", "Input"], [s.cw5 + s.cw1h, "--s-write", "Cache write"], [s.cr, "--s-read", "Cache read"], [s.out, "--s-output", "Output"]];
+  const t = parts.reduce((a, p) => a + p[0], 0) || 1;
+  const title = parts.map(p => `${p[2]} ${fmtTok(p[0])} (${(100*p[0]/t).toFixed(1)}%)`).join(" · ");
+  return `<div class="mix" title="${title}">` + parts.filter(p => p[0] > 0).map(p => `<span style="flex:${p[0]/t};background:var(${p[1]})"></span>`).join("") + "</div>";
+}
+
+function sortRows(rows, sort, get) {
+  const k = sort.key, d = sort.dir === "asc" ? 1 : -1;
+  return rows.sort((a, b) => { const x = get(a, k), y = get(b, k); return (x > y ? 1 : x < y ? -1 : 0) * d; });
+}
+function header(cols, sort, id) {
+  return "<thead><tr>" + cols.map(c => `<th class="${c.num ? "num" : ""}" data-k="${c.k}" ${sort.key === c.k ? `data-dir="${sort.dir}"` : ""}>${c.l}</th>`).join("") + "</tr></thead>";
+}
+function wireSort(tableSel, sort) {
+  $(tableSel).querySelectorAll("th[data-k]").forEach(th => th.onclick = () => {
+    sort.dir = sort.key === th.dataset.k && sort.dir === "desc" ? "asc" : "desc"; sort.key = th.dataset.k; render();
+  });
+}
+
+function renderProjects() {
+  const by = new Map();
+  for (const s of DATA.sessions) {
+    const p = by.get(s.project) || { project: s.project, label: s.project_label, tabs: 0, live: 0, big: 0, calls: 0, inp: 0, out: 0, cr: 0, cw5: 0, cw1h: 0, cost: 0, last_ts: 0 };
+    p.tabs++; if (cacheState(s).alive) p.live++; if (isBig(s) && recent(s)) p.big++;
+    for (const k of ["calls", "inp", "out", "cr", "cw5", "cw1h", "cost"]) p[k] += s[k];
+    p.last_ts = Math.max(p.last_ts, s.last_ts || 0);
+    by.set(s.project, p);
+  }
+  const get = (p, k) => k === "tokens" ? total(p) : k === "hit" ? p.cr / Math.max(1, p.inp + p.cr + p.cw5 + p.cw1h) : p[k];
+  const rows = sortRows([...by.values()], sortP, get);
+  const cols = [{k:"label",l:"Project"},{k:"tabs",l:"Tabs",num:1},{k:"live",l:"Live caches",num:1},{k:"big",l:"Oversized",num:1},{k:"calls",l:"Calls",num:1},{k:"tokens",l:"Tokens",num:1},{k:"mix",l:"Token mix"},{k:"hit",l:"Cache hit",num:1},{k:"cost",l:"Cost",num:1},{k:"last_ts",l:"Last active",num:1}];
+  $("#projects").innerHTML = header(cols, sortP) + "<tbody>" + rows.map(p => `<tr data-p="${esc(p.project)}" style="cursor:pointer">
+    <td title="${esc(p.project)}">${esc(p.label)}</td><td class="num">${p.tabs}</td><td class="num">${p.live || '<span class="muted">0</span>'}</td><td class="num">${p.big || '<span class="muted">0</span>'}</td>
+    <td class="num">${p.calls.toLocaleString()}</td><td class="num">${fmtTok(total(p))}</td><td>${mixBar(p)}</td>
+    <td class="num">${(100 * get(p, "hit")).toFixed(1)}%</td><td class="num"><b>${fmtUSD(p.cost)}</b></td>
+    <td class="num sec">${p.last_ts ? fmtAgo(now() - p.last_ts) : "–"}</td></tr>`).join("") + "</tbody>";
+  wireSort("#projects", sortP);
+  $("#projects").querySelectorAll("tr[data-p]").forEach(tr => tr.onclick = () => { $("#fProject").value = tr.dataset.p; render(); });
+}
+
+function cacheBadge(s) {
+  const c = cacheState(s);
+  if (c.alive) {
+    const warn = c.left < 60;
+    return `<span class="badge"><span class="dot" style="background:var(${warn ? "--warning" : "--good"})"></span>${warn ? "Expiring" : "Alive"} · ${fmtLeft(c.left)} <span class="muted">${s.last_ttl}</span></span>`;
+  }
+  return `<span class="badge"><span class="dot" style="background:var(--text-muted)"></span>Expired <span class="muted">${s.last_ttl}</span></span>`;
+}
+
+function renderSessions() {
+  const get = (s, k) => k === "tokens" ? total(s) : k === "title" ? titleOf(s).toLowerCase() : k === "cache" ? cacheState(s).left : k === "reread" ? (cacheState(s).alive ? s.reread_warm : s.reread_cold) : k === "avg" ? s.cost / s.calls : s[k] ?? 0;
+  const rows = sortRows(filtered(), sortS, get);
+  const cols = [{k:"title",l:"Tab"},{k:"last_model",l:"Model"},{k:"last_ts",l:"Last reply",num:1},{k:"calls",l:"Calls",num:1},{k:"tokens",l:"Tokens",num:1},{k:"mix",l:"Token mix"},{k:"cost",l:"Cost",num:1},{k:"avg",l:"Avg / call",num:1},{k:"last_ctx",l:"Context",num:1},{k:"cache",l:"Cache"},{k:"reread",l:"Reread now",num:1}];
+  $("#sessions").innerHTML = header(cols, sortS) + "<tbody>" + rows.map(s => {
+    const c = cacheState(s);
+    return `<tr data-id="${esc(s.id)}" class="${selected === s.id ? "sel" : ""}" style="cursor:pointer">
+    <td class="title"><div class="t">${esc(titleOf(s))}</div><div class="p">${esc(s.project_label)}${s.subagents ? ` · ${s.subagents} subagent${s.subagents > 1 ? "s" : ""}` : ""}</div></td>
+    <td class="sec">${esc(shortModel(s.last_model))}${s.last_speed === "fast" ? " ⚡" : ""}</td>
+    <td class="num sec">${s.last_ts ? fmtAgo(now() - s.last_ts) : "–"}</td>
+    <td class="num">${s.calls.toLocaleString()}</td><td class="num">${fmtTok(total(s))}</td><td>${mixBar(s)}</td>
+    <td class="num"><b>${fmtUSD(s.cost)}</b></td><td class="num">${fmtUSD(s.cost / s.calls)}</td>
+    <td class="num">${isBig(s) ? `<span class="badge" title="Over the ${fmtTok(limit())} limit"><span class="dot" style="background:var(--warning)"></span>Oversized · ${fmtTok(s.last_ctx)}</span>` : fmtTok(s.last_ctx)}</td>
+    <td>${cacheBadge(s)}</td>
+    <td class="num" title="warm ${fmtUSD(s.reread_warm)} · cold ${fmtUSD(s.reread_cold)}">${c.alive ? fmtUSD(s.reread_warm) + ' <span class="muted">warm</span>' : fmtUSD(s.reread_cold) + ' <span class="muted">cold</span>'}</td></tr>`;
+  }).join("") + "</tbody>";
+  if (!rows.length) $("#sessions").innerHTML += `<tbody><tr><td colspan="11" class="muted">No tabs match.</td></tr></tbody>`;
+  wireSort("#sessions", sortS);
+  $("#sessions").querySelectorAll("tr[data-id]").forEach(tr => tr.onclick = () => { selected = tr.dataset.id; render(); });
+}
+
+function renderDetail() {
+  const s = DATA.sessions.find(x => x.id === selected);
+  if (!s) return;
+  const c = cacheState(s), p = DATA.prices[Object.keys(DATA.prices).sort((a, b) => b.length - a.length).find(k => (s.last_model || "").startsWith(k))] || {};
+  const models = Object.entries(s.models).sort((a, b) => b[1] - a[1]).map(([m, v]) => `${esc(shortModel(m))} ${fmtUSD(v)}`).join(", ");
+  $("#detail").innerHTML = `<h2>${esc(titleOf(s))}</h2><dl>
+    <dt>Project</dt><dd>${esc(s.project_label)} <span class="muted">${esc(s.cwd || "")}</span></dd>
+    <dt>Session id</dt><dd class="sec">${esc(s.id)}</dd>
+    <dt>Active</dt><dd>${s.first_ts ? new Date(s.first_ts*1000).toLocaleString() : "–"} → ${s.last_ts ? new Date(s.last_ts*1000).toLocaleString() : "–"}</dd>
+    <dt>Cost</dt><dd><b>${fmtUSD(s.cost)}</b>${s.sub_cost ? ` <span class="muted">(subagents ${fmtUSD(s.sub_cost)})</span>` : ""} · ${models}</dd>
+    <dt>Input</dt><dd>${s.inp.toLocaleString()}</dd>
+    <dt>Cache write</dt><dd>${(s.cw5 + s.cw1h).toLocaleString()} <span class="muted">(5m ${fmtTok(s.cw5)} · 1h ${fmtTok(s.cw1h)})</span></dd>
+    <dt>Cache read</dt><dd>${s.cr.toLocaleString()}</dd>
+    <dt>Output</dt><dd>${s.out.toLocaleString()}</dd>
+    <dt>Context now</dt><dd>${s.last_ctx.toLocaleString()} tokens</dd>
+    <dt>Cache</dt><dd>${cacheBadge(s)} ${c.alive ? "" : `<span class="muted">expired ${fmtAgo(-c.left)}</span>`}</dd>
+    <dt>Reread warm</dt><dd>${fmtUSD(s.reread_warm)} <span class="muted">at ${p.read ?? "?"} $/M cache read</span></dd>
+    <dt>Reread cold</dt><dd>${fmtUSD(s.reread_cold)} <span class="muted">at ${s.last_ttl === "1h" ? p.w1h : p.w5} $/M cache write (${s.last_ttl})</span></dd>
+  </dl>`;
+}
+
+["#fProject", "#fRange", "#fLive", "#fBig"].forEach(s => $(s).addEventListener("change", render));
+$("#fLimit").addEventListener("change", () => { store.set("limit", $("#fLimit").value); render(); });
+$("#fSearch").addEventListener("input", render);
+addEventListener("resize", () => DATA && renderChart());
+load();
+setInterval(load, 5000);
+setInterval(() => { if (DATA) { renderTiles(); renderSessions(); renderDetail(); } }, 1000);
+</script>
+</body>
+</html>
