@@ -69,6 +69,7 @@ const lastReply = atom({ plugin: 'token-panel', key: 'lastReply' } as const, 0)
 const tick = atom({ plugin: 'token-panel', key: 'tick' } as const, 0)
 const warm = atom({ plugin: 'token-panel', key: 'warm' } as const, null)
 const prefs = atom({ plugin: 'token-panel', key: 'prefs' } as const, DEFAULTS)
+const lastCompact = atom({ plugin: 'token-panel', key: 'lastCompact' } as const, null)
 // The project's own list of what to update: free text, read at each use.
 const DOCS_FILE = '.claude/handoff-docs.md'
 const PING = "Keep-alive ping from the token panel, to keep this tab's prompt cache warm. Reply with only: ok"
@@ -281,6 +282,18 @@ export const register: Register = on => {
     }
   })
 
+  // Remembers how much the last compaction took off, for the band.
+  on('session.compact', async ($, e, next) => {
+    const done = await next(e)
+    if (e.trigger !== 'precompute' && 'tokensBefore' in done && done.tokensBefore && done.tokensAfter !== undefined) {
+      const before = done.tokensBefore
+      const after = done.tokensAfter
+      await update($, lastCompact, () => ({ before, after }))
+    }
+
+    return done
+  })
+
   on('prompt.submit', async ($, e, next) => {
     if (e.origin.kind === 'human') docsFresh = false
 
@@ -331,6 +344,18 @@ export const register: Register = on => {
     }))
 
     const big = ctx > p.oversizedTokens
+    const lc = await read($, lastCompact)
+
+    // The second row's figures, most useful first: a narrow band cuts from the end.
+    const week = u?.limits.find(l => l.kind === 'seven_day')
+    const extras = [
+      week?.resetsAt ? `week ${resets(week.resetsAt)}` : '',
+      mine && mine.calls ? `tab ${usd(mine.cost)} (${usd(mine.cost / mine.calls)}/msg)` : '',
+      mine && mine.subagents
+        ? `${mine.subagents} subagent${mine.subagents > 1 ? 's' : ''} ${usd(mine.sub_cost)}, kept ${tok(mine.sub_kept)} out`
+        : '',
+      lc ? `last compact −${tok(Math.max(0, lc.before - lc.after))}` : '',
+    ].filter(Boolean)
 
     // Two rows that never change shape: the figures on the first, the
     // controls on the second, every control always drawn. Each text sits in a
@@ -360,46 +385,51 @@ export const register: Register = on => {
           </Box>
         </Box>
         <Box flexDirection="row" gap="xs" alignItems="center">
-          <Button
-            key="keepwarm"
-            label={w ? 'Stop warm' : 'Keep warm'}
-            onPress={async () => {
-              if (w) {
-                await update($, warm, () => null)
-                return
-              }
-              const t = (await $.clock.now()) / 1000
-              await update($, warm, () => ({ until: t + p.keepWarmHours * 3600, pings: 0 }))
-            }}
-          />
-          <Select
-            key="warmhours"
-            options={choices(CHOICES.keepWarmHours, p.keepWarmHours, hoursLabel)}
-            value={String(p.keepWarmHours)}
-            onSelect={async v => {
-              await savePrefs($, { keepWarmHours: Number(v) })
-              // A new length while warm counts from now.
-              const t = (await $.clock.now()) / 1000
-              await update($, warm, cur => (cur ? { ...cur, until: t + Number(v) * 3600 } : cur))
-            }}
-          />
-          <Button
-            key="handoff"
-            label="Handoff"
-            dimColor={!big}
-            onPress={() => void $.command.run({ command: 'handoff', args: '' })}
-          />
-          <Button key="tabs" label="Tabs" onPress={() => void $.ui.open({ id: PANE, title: TITLE, columns: 40 })} />
-          <Button
-            key="settings"
-            label="⚙"
-            onPress={() => void $.ui.open({ id: SETTINGS_PANE, title: 'Token panel settings', columns: 44 })}
-          />
           <Box flexGrow={1} flexShrink={1} minWidth={0} overflow="hidden">
-            <Text size="caption" wrap="truncate-end">
-              {w ? <Text color="success" tabular>{`warm ×${w.pings} till ${hm(w.until)}`}</Text> : ''}
-              {err ? <Text color="warning">{`${w ? '  │  ' : ''}⚠ no tab data (see Tabs)`}</Text> : ''}
+            <Text size="caption" dimColor wrap="truncate-end">
+              {err ? <Text color="warning">{'⚠ no tab data (see Tabs)'}</Text> : ''}
+              {extras.map((x, i) => `${i || err ? ' · ' : ''}${x}`).join('')}
             </Text>
+          </Box>
+          <Box flexDirection="row" gap="xs" alignItems="center" flexShrink={0}>
+            {w ? (
+              <Button key="keepwarm" label="Stop keep warm" variant="primary" onPress={() => void update($, warm, () => null)}>
+                {'Warm: '}
+                <Text color="success" tabular>{hm(w.until)}</Text>
+              </Button>
+            ) : (
+              <Button
+                key="keepwarm"
+                label="Keep warm"
+                onPress={async () => {
+                  const t = (await $.clock.now()) / 1000
+                  await update($, warm, () => ({ until: t + p.keepWarmHours * 3600, pings: 0 }))
+                }}
+              />
+            )}
+            <Select
+              key="warmhours"
+              options={choices(CHOICES.keepWarmHours, p.keepWarmHours, hoursLabel)}
+              value={String(p.keepWarmHours)}
+              onSelect={async v => {
+                await savePrefs($, { keepWarmHours: Number(v) })
+                // A new length while warm counts from now.
+                const t = (await $.clock.now()) / 1000
+                await update($, warm, cur => (cur ? { ...cur, until: t + Number(v) * 3600 } : cur))
+              }}
+            />
+            <Button
+              key="handoff"
+              label="Handoff"
+              dimColor={!big}
+              onPress={() => void $.command.run({ command: 'handoff', args: '' })}
+            />
+            <Button key="tabs" label="Tabs" onPress={() => void $.ui.open({ id: PANE, title: TITLE, columns: 40 })} />
+            <Button
+              key="settings"
+              label="⚙"
+              onPress={() => void $.ui.open({ id: SETTINGS_PANE, title: 'Token panel settings', columns: 44 })}
+            />
           </Box>
         </Box>
       </Box>

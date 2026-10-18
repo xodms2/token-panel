@@ -12,6 +12,9 @@ export type TabRow = {
   cost: number
   calls: number
   last_model: string | null
+  subagents: number
+  sub_cost: number
+  sub_kept: number
 }
 
 export type Summary = {
@@ -48,6 +51,7 @@ declare module 'claude-code' {
       tick: number
       warm: { until: number; pings: number } | null
       prefs: Prefs
+      lastCompact: { before: number; after: number } | null
     }
   }
 }

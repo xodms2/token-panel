@@ -32,7 +32,7 @@ PROJECTS = CONFIG / "projects"
 DATA = CONFIG / "token-panel"
 STATE_FILE = DATA / "state.pickle"
 SUMMARY_FILE = DATA / "summary.json"
-STATE_VERSION = 5
+STATE_VERSION = 6
 ONCE = "--once" in sys.argv
 _args = [a for a in sys.argv[1:] if not a.startswith("--")]
 PORT = int(_args[0]) if _args else 8777
@@ -78,7 +78,7 @@ def new_file_rec(path, project, session, is_sub):
         "path": path, "project": project, "session": session, "is_sub": is_sub,
         "offset": 0, "size": 0, "title": None, "first_prompt": None, "cwd": None,
         "calls": 0, "inp": 0, "out": 0, "cr": 0, "cw5": 0, "cw1h": 0, "cost": 0.0,
-        "models": {}, "first_ts": None, "last_ts": None, "last_ctx": 0,
+        "models": {}, "first_ts": None, "last_ts": None, "last_ctx": 0, "first_ctx": None,
         "last_model": None, "last_ttl": "5m", "last_speed": "standard",
         "last_id": None, "days": {},
     }
@@ -171,7 +171,7 @@ class Store:
                     tot["week"] += c
         keep = ("id", "title", "first_prompt", "project_label", "last_ts", "ttl_seconds",
                 "last_ttl", "last_ctx", "reread_warm", "reread_cold", "cost", "calls",
-                "last_model")
+                "last_model", "subagents", "sub_cost", "sub_kept")
         recent = sorted((s for s in snap["sessions"] if s["last_ts"] and now - s["last_ts"] < 14 * 86400),
                         key=lambda s: -s["last_ts"])[:40]
         out = {"written": now, **tot, "sessions": [{k: s[k] for k in keep} for s in recent]}
@@ -262,6 +262,8 @@ class Store:
         if ts:
             epoch = datetime.fromisoformat(ts.replace("Z", "+00:00")).timestamp()
         rec["calls"] += 1
+        if rec["first_ctx"] is None:
+            rec["first_ctx"] = inp + cr + cw  # what it started with: its prompt and task
         rec["inp"] += inp
         rec["out"] += out
         rec["cr"] += cr
@@ -302,7 +304,7 @@ class Store:
                     "id": r["session"], "project": r["project"], "title": None,
                     "first_prompt": None, "cwd": None, "calls": 0, "inp": 0,
                     "out": 0, "cr": 0, "cw5": 0, "cw1h": 0, "cost": 0.0,
-                    "sub_cost": 0.0, "subagents": 0, "models": {},
+                    "sub_cost": 0.0, "subagents": 0, "sub_kept": 0, "models": {},
                     "first_ts": None, "last_ts": None, "last_ctx": 0,
                     "last_model": None, "last_ttl": "5m", "last_speed": "standard",
                     "days": {},
@@ -322,6 +324,9 @@ class Store:
             if r["is_sub"]:
                 s["sub_cost"] += r["cost"]
                 s["subagents"] += 1
+                # What it read on its own: context it grew past its starting
+                # prompt, which the main thread never had to carry.
+                s["sub_kept"] += max(0, r["last_ctx"] - (r.get("first_ctx") or r["last_ctx"]))
                 if r["last_ts"] and (s["last_ts"] is None or r["last_ts"] > s["last_ts"]) and not s.get("_main"):
                     s["last_ts"] = r["last_ts"]
             else:

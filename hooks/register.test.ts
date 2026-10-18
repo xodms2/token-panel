@@ -53,9 +53,9 @@ test('Keep warm switches on from the band and Stop switches it off', async ($, o
     props: { hasSurvey: false, isWorking: false, maxRows: 10, columns: 95, scroll: { offset: 0, bodyRows: 10 } },
   })
   await ui.press({ key: 'keepwarm' })
-  expect(await ui.find({ type: 'Text', text: /warm ×0 till/ })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: /\d{2}:\d{2}/ })).toBeDefined()
   await ui.press({ key: 'keepwarm' })
-  expect(await ui.find({ key: 'keepwarm' })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: /\d{2}:\d{2}/ })).toBeUndefined()
   await ui.unmount()
 })
 
