@@ -3,3 +3,5 @@ __pycache__/
 .claude-plugin/types/
 .DS_Store
 Thumbs.db
+CLAUDE.local.md
+.claude/launch.json
