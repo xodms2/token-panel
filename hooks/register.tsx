@@ -190,6 +190,28 @@ async function docsPrompt($: EngineInterface, then: string) {
   ].join('\n')
 }
 
+// Asks Claude to update the docs and write the handoff note; answers what
+// happened. Called directly by the Handoff button: running /handoff from the
+// panel's own press would skip the panel's own command hook (the engine never
+// runs a plugin's hook inside that plugin's call), and nothing would answer.
+async function startHandoff($: EngineInterface) {
+  try {
+    const text = await docsPrompt($, HANDOFF_THEN)
+    pending = 'handoff'
+    // A command or a press may not start a turn itself; a timer may, once it returns.
+    $.clock.after(10, () => {
+      $.prompt.submit({ text }).catch(async err => {
+        pending = null
+        await update($, problem, () => `Handoff could not start: ${err instanceof Error ? err.message : String(err)}`)
+      })
+    })
+    return 'Updating the docs and writing the handoff note.'
+  } catch (err) {
+    pending = null
+    return `Handoff could not start: ${err instanceof Error ? err.message : String(err)}`
+  }
+}
+
 // Sends one tiny message when this tab's cache is about to expire, while
 // Keep warm is on. A tab already cold is left alone: a ping would pay the
 // full rebuild it exists to avoid.
@@ -273,33 +295,15 @@ export const register: Register = on => {
     return { text: 'Token panel opened.' }
   })
 
-  // Always answers: a failure says what went wrong instead of leaving the
-  // engine's bare "no hook answered".
-  on('command.run', { command: 'handoff' }, async $ => {
-    try {
-      const text = await docsPrompt($, HANDOFF_THEN)
-      pending = 'handoff'
-      // A command may not start a turn itself; a timer may, once it returns.
-      $.clock.after(10, () => {
-        $.prompt.submit({ text }).catch(async err => {
-          pending = null
-          await update($, problem, () => `Handoff could not start: ${err instanceof Error ? err.message : String(err)}`)
-        })
-      })
-
-      return { text: 'Updating the docs and writing the handoff note.' }
-    } catch (err) {
-      pending = null
-      return { text: `Handoff could not start: ${err instanceof Error ? err.message : String(err)}` }
-    }
-  })
+  on('command.run', { command: 'handoff' }, async $ => ({ text: await startHandoff($) }))
 
   // /compact updates the docs first, then compacts when that turn ends.
-  // `/compact skip-docs` compacts at once; so does a /compact right after an update.
+  // `/compact skip-docs` compacts at once; so does a /compact right after an
+  // update, and one a plugin runs (the person's own typing is never 'plugin').
   on('command.run', { command: 'compact' }, async ($, e, next) => {
     const args = e.args.trim()
     const skip = /^skip-docs\b/.test(args)
-    if (e.origin.kind !== 'human' || docsFresh || skip) {
+    if (e.origin.kind === 'plugin' || docsFresh || skip) {
       return next({ ...e, args: args.replace(/^skip-docs\b\s*/, '') })
     }
     compactAfter = args
@@ -325,7 +329,7 @@ export const register: Register = on => {
   })
 
   on('prompt.submit', async ($, e, next) => {
-    if (e.origin.kind === 'human') docsFresh = false
+    if (e.origin.kind !== 'plugin') docsFresh = false
 
     return next(e)
   })
@@ -460,7 +464,7 @@ export const register: Register = on => {
               key="handoff"
               label="Handoff"
               dimColor={!big}
-              onPress={() => void $.command.run({ command: 'handoff', args: '' })}
+              onPress={async () => $.ui.toast(await startHandoff($))}
             />
             <Button key="tabs" label="Tabs" onPress={() => void $.ui.open({ id: PANE, title: TITLE, columns: 40 })} />
             <Button

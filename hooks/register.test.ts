@@ -72,7 +72,7 @@ test('a typed /compact sends the doc update first and compacts nothing yet', asy
     return { text: 'compacted' }
   })
   on('fs.read', () => ({ value: '- docs/11_journal.md' }) as never)
-  const out = await $.command.run({ command: 'compact', args: '', origin: { kind: 'human' } } as never)
+  const out = await $.command.run({ command: 'compact', args: '', origin: { kind: 'composer' } } as never)
   expect(compacted).toBe(false)
   await clock.advance(20)
   expect(out.text).toContain('docs first')
@@ -109,8 +109,30 @@ test('/handoff answers and then sends the doc update with the handoff note', asy
     return { text: e.text }
   })
   on('fs.read', () => ({ value: '- docs/11_journal.md' }) as never)
-  const out = await $.command.run({ command: 'handoff', args: '', origin: { kind: 'human' } } as never)
+  const out = await $.command.run({ command: 'handoff', args: '', origin: { kind: 'composer' } } as never)
   expect(out.text).toContain('handoff')
   await clock.advance(20)
   expect(sent[0]).toContain('handoff.md')
+})
+
+test('the Handoff button starts the handoff itself, not through /handoff', async ($, on) => {
+  const clock = mock.clock(on)
+  const sent: string[] = []
+  on('prompt.submit', (_$, e) => {
+    sent.push(e.text)
+    return { text: e.text }
+  })
+  on('fs.read', () => ({ value: '- docs/11_journal.md' }) as never)
+  on('ui.toast', () => ({ value: undefined }) as never)
+  const ui = await $.ui.mount({
+    plugin: 'token-panel',
+    surface: 'desktop',
+    component: 'AbovePrompt',
+    viewport: { columns: 100, rows: 40 },
+    props: { hasSurvey: false, isWorking: false, maxRows: 10, columns: 95, scroll: { offset: 0, bodyRows: 10 } },
+  })
+  await ui.press({ key: 'handoff' })
+  await clock.advance(20)
+  expect(sent[0]).toContain('handoff.md')
+  await ui.unmount()
 })
