@@ -371,7 +371,7 @@ export const register: Register = on => {
               ))}
               {limits.length ? <Text dimColor>{'  │  '}</Text> : ''}
               <Text color={big ? 'warning' : undefined} dimColor={!big}>
-                {`context ${tok(ctx)}${big ? ' oversized' : ''}`}
+                {`context ${tok(ctx)}${u?.window ? ` (${Math.round((ctx / u.window) * 100)}%)` : ''}${big ? ' oversized' : ''}`}
               </Text>
               <Text dimColor>{' · '}</Text>
               {left > 0 ? (

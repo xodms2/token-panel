@@ -3,14 +3,14 @@
 Two rows above the message box that show, for the tab you're in:
 
 ```
-5h 3% · week 88%  │  context 385k oversized · cache 59:44 · reread $0.077  │  $19.43 today
+5h 3% · week 88%  │  context 385k (39%) oversized · cache 59:44 · reread $0.077  │  $19.43 today
 week resets Mon 09:00 · tab $37.75 ($0.13/msg) · 3 subagents $0.40, kept 120k out · last compact −280k   [Keep warm] [3h ▾] [Handoff] [Tabs] [⚙]
 ```
 
 Two rows that keep their size. A figure that runs out of room is cut at the row's end, least useful last, instead of making the band taller.
 
 - **5h / week**: your plan's usage limits (yellow from 70%, red from 90%).
-- **context**: how much this conversation carries; it turns yellow and says *oversized* past a limit you set.
+- **context**: how much this conversation carries, and that as a share of the model's window (where Claude Code compacts on its own); it turns yellow and says *oversized* past a limit you set.
 - **cache**: how long this tab's prompt cache stays alive. Every message rereads the whole conversation: cheap while the cache is alive, a full rebuild once it expires.
 - **reread**: what the next message costs to read the conversation back in, warm or cold.
 - **today**: spend across all your tabs today.
