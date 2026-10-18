@@ -264,13 +264,25 @@ export const register: Register = on => {
     return { text: 'Token panel opened.' }
   })
 
+  // Always answers: a failure says what went wrong instead of leaving the
+  // engine's bare "no hook answered".
   on('command.run', { command: 'handoff' }, async $ => {
-    pending = 'handoff'
-    const text = await docsPrompt($, HANDOFF_THEN)
-    // A command may not start a turn itself; a timer may, once it returns.
-    $.clock.after(10, () => void $.prompt.submit({ text }))
+    try {
+      const text = await docsPrompt($, HANDOFF_THEN)
+      pending = 'handoff'
+      // A command may not start a turn itself; a timer may, once it returns.
+      $.clock.after(10, () => {
+        $.prompt.submit({ text }).catch(async err => {
+          pending = null
+          await update($, problem, () => `Handoff could not start: ${err instanceof Error ? err.message : String(err)}`)
+        })
+      })
 
-    return { text: 'Updating the docs and writing the handoff note.' }
+      return { text: 'Updating the docs and writing the handoff note.' }
+    } catch (err) {
+      pending = null
+      return { text: `Handoff could not start: ${err instanceof Error ? err.message : String(err)}` }
+    }
   })
 
   // /compact updates the docs first, then compacts when that turn ends.

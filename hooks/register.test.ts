@@ -100,3 +100,17 @@ test('a pick in the settings panel is saved to settings.json', async ($, on) => 
   expect(writes.at(-1)).toContain('"keepWarmHours": 8')
   await ui.unmount()
 })
+
+test('/handoff answers and then sends the doc update with the handoff note', async ($, on) => {
+  const clock = mock.clock(on)
+  const sent: string[] = []
+  on('prompt.submit', (_$, e) => {
+    sent.push(e.text)
+    return { text: e.text }
+  })
+  on('fs.read', () => ({ value: '- docs/11_journal.md' }) as never)
+  const out = await $.command.run({ command: 'handoff', args: '', origin: { kind: 'human' } } as never)
+  expect(out.text).toContain('handoff')
+  await clock.advance(20)
+  expect(sent[0]).toContain('handoff.md')
+})
