@@ -4,7 +4,7 @@ Two rows above the message box that show, for the tab you're in:
 
 ```
 5h 3% · week 88%  │  context 385k (39%) oversized · cache 59:44 · reread $0.077  │  $19.43 today
-week resets Mon 09:00 · tab $37.75 ($0.13/msg) · 3 subagents $0.40, kept 120k out · last compact −280k   [Keep warm] [3h ▾] [Handoff] [Tabs] [⚙]
+week resets Mon 09:00 · tab $37.75 ($0.13/msg) · 3 subagents $0.40, kept 120k out · last compact −280k · read 67% · rebuild 16% · output 16%   [Keep warm] [3h ▾] [Handoff] [Tabs] [⚙]
 ```
 
 Two rows that keep their size. A figure that runs out of room is cut at the row's end, least useful last, instead of making the band taller.
@@ -18,6 +18,7 @@ Two rows that keep their size. A figure that runs out of room is cut at the row'
 - **tab**: what this tab has cost so far, and per message (input and output together).
 - **subagents**: how many this tab ran, what they cost, and how much they read on their own: context the main tab never had to carry and reread.
 - **last compact**: how much the last compaction took off; every later message rereads that much less.
+- **read / rebuild / output**: where this tab's cost went. A big *read* share means the context is too large (compact, or hand off to a fresh tab); a big *rebuild* share means the cache keeps going cold (reply within the countdown, Keep warm, don't switch models mid-tab); a big *output* share means long answers or a high effort setting.
 
 Dollar figures are what the same tokens would cost at Anthropic's API list prices. A Pro or Max plan isn't billed this way, so read them as a yardstick for comparing tabs. The prices are a table in `reader/server.py`, current as of October 2026.
 

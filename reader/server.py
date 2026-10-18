@@ -32,7 +32,7 @@ PROJECTS = CONFIG / "projects"
 DATA = CONFIG / "token-panel"
 STATE_FILE = DATA / "state.pickle"
 SUMMARY_FILE = DATA / "summary.json"
-STATE_VERSION = 6
+STATE_VERSION = 7
 ONCE = "--once" in sys.argv
 _args = [a for a in sys.argv[1:] if not a.startswith("--")]
 PORT = int(_args[0]) if _args else 8777
@@ -78,6 +78,7 @@ def new_file_rec(path, project, session, is_sub):
         "path": path, "project": project, "session": session, "is_sub": is_sub,
         "offset": 0, "size": 0, "title": None, "first_prompt": None, "cwd": None,
         "calls": 0, "inp": 0, "out": 0, "cr": 0, "cw5": 0, "cw1h": 0, "cost": 0.0,
+        "c_read": 0.0, "c_write": 0.0, "c_out": 0.0,
         "models": {}, "first_ts": None, "last_ts": None, "last_ctx": 0, "first_ctx": None,
         "last_model": None, "last_ttl": "5m", "last_speed": "standard",
         "last_id": None, "days": {},
@@ -171,7 +172,7 @@ class Store:
                     tot["week"] += c
         keep = ("id", "title", "first_prompt", "project_label", "last_ts", "ttl_seconds",
                 "last_ttl", "last_ctx", "reread_warm", "reread_cold", "cost", "calls",
-                "last_model", "subagents", "sub_cost", "sub_kept")
+                "last_model", "subagents", "sub_cost", "sub_kept", "c_read", "c_write", "c_out")
         recent = sorted((s for s in snap["sessions"] if s["last_ts"] and now - s["last_ts"] < 14 * 86400),
                         key=lambda s: -s["last_ts"])[:40]
         out = {"written": now, **tot, "sessions": [{k: s[k] for k in keep} for s in recent]}
@@ -254,8 +255,13 @@ class Store:
             w5 = cw
         searches = (u.get("server_tool_use") or {}).get("web_search_requests") or 0
         p = price(model, speed)
-        cost = (inp * p["in"] + out * p["out"] + cr * p["read"]
-                + w5 * p["w5"] + w1h * p["w1h"]) / 1e6 + searches * WEB_SEARCH_USD
+        # Three parts with three different fixes: rereading a live cache,
+        # writing context into the cache again (new input counts here: it is
+        # sent and stored the same way), and the answer itself.
+        c_read = cr * p["read"] / 1e6
+        c_write = (inp * p["in"] + w5 * p["w5"] + w1h * p["w1h"]) / 1e6
+        c_out = out * p["out"] / 1e6 + searches * WEB_SEARCH_USD
+        cost = c_read + c_write + c_out
 
         ts = d.get("timestamp")
         epoch = None
@@ -270,6 +276,9 @@ class Store:
         rec["cw5"] += w5
         rec["cw1h"] += w1h
         rec["cost"] += cost
+        rec["c_read"] += c_read
+        rec["c_write"] += c_write
+        rec["c_out"] += c_out
         rec["models"][model] = rec["models"].get(model, 0) + cost
         rec["cwd"] = d.get("cwd") or rec["cwd"]  # latest: a tab can move folders
         if rec["cwd"]:
@@ -304,12 +313,13 @@ class Store:
                     "id": r["session"], "project": r["project"], "title": None,
                     "first_prompt": None, "cwd": None, "calls": 0, "inp": 0,
                     "out": 0, "cr": 0, "cw5": 0, "cw1h": 0, "cost": 0.0,
+                    "c_read": 0.0, "c_write": 0.0, "c_out": 0.0,
                     "sub_cost": 0.0, "subagents": 0, "sub_kept": 0, "models": {},
                     "first_ts": None, "last_ts": None, "last_ctx": 0,
                     "last_model": None, "last_ttl": "5m", "last_speed": "standard",
                     "days": {},
                 }
-            for k in ("calls", "inp", "out", "cr", "cw5", "cw1h", "cost"):
+            for k in ("calls", "inp", "out", "cr", "cw5", "cw1h", "cost", "c_read", "c_write", "c_out"):
                 s[k] += r[k]
             for mdl, c in r["models"].items():
                 s["models"][mdl] = s["models"].get(mdl, 0) + c

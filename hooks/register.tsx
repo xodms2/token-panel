@@ -119,6 +119,15 @@ const DOCS_STARTER = [
   '- Handoff note: handoff.md in the project root',
   '',
 ].join('\n')
+// Where a tab's cost went: rereading a live cache, rebuilding it, answering.
+// Empty until the reader has the parts (a summary from an older reader has none).
+const split = (t: TabRow | null) => {
+  if (!t || typeof t.c_read !== 'number') return ''
+  const all = t.c_read + t.c_write + t.c_out
+  if (!(all > 0)) return ''
+  const pct = (v: number) => `${Math.round((v / all) * 100)}%`
+  return `read ${pct(t.c_read)} · rebuild ${pct(t.c_write)} · output ${pct(t.c_out)}`
+}
 const titleOf = (t: TabRow) => t.title || t.first_prompt || t.id.slice(0, 8)
 const cut = (s: string, n: number) => (s.length > n ? `${s.slice(0, Math.max(1, n - 1))}…` : s)
 
@@ -380,6 +389,7 @@ export const register: Register = on => {
         ? `${mine.subagents} subagent${mine.subagents > 1 ? 's' : ''} ${usd(mine.sub_cost)}, kept ${tok(mine.sub_kept)} out`
         : '',
       lc ? `last compact −${tok(Math.max(0, lc.before - lc.after))}` : '',
+      split(mine),
     ].filter(Boolean)
 
     // Two rows that never change shape: the figures on the first, the

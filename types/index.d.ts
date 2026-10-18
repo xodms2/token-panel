@@ -15,6 +15,9 @@ export type TabRow = {
   subagents: number
   sub_cost: number
   sub_kept: number
+  c_read: number
+  c_write: number
+  c_out: number
 }
 
 export type Summary = {
