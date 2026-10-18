@@ -53,7 +53,15 @@ async function runFirst($: EngineInterface, tries: string[][], init?: { cwd?: st
   throw new Error(failure)
 }
 
-const DEFAULTS: Prefs = { keepWarmHours: 3, pingMinutesBefore: 5, oversizedTokens: 200_000 }
+const DEFAULTS: Prefs = { keepWarmHours: 3, pingMinutesBefore: 5, oversizedTokens: 200_000, language: 'en-US' }
+// The weekday's language. The app keeps its own in a file beside its sign-in
+// tokens, which the panel does not open; the person picks it here instead.
+const LANGUAGES = [
+  { value: 'en-US', label: 'English' },
+  { value: 'ko-KR', label: '한국어' },
+  { value: 'ja-JP', label: '日本語' },
+  { value: 'system', label: "Computer's language" },
+]
 const CHOICES = {
   keepWarmHours: [1, 2, 3, 4, 8],
   pingMinutesBefore: [2, 5, 10],
@@ -95,12 +103,12 @@ const bar = (pct: number, width: number) => {
 }
 const limitName = (kind: string) =>
   kind === 'five_hour' ? '5-hour' : kind === 'seven_day' ? 'Weekly' : kind.replace(/_/g, ' ')
-const resets = (iso: string | null) => {
+const resets = (iso: string | null, language: string) => {
   if (!iso) return ''
   const d = new Date(iso)
   const sameDay = d.toDateString() === new Date().toDateString()
   const hm = `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
-  return sameDay ? `resets ${hm}` : `resets ${d.toLocaleDateString(undefined, { weekday: 'short' })} ${hm}`
+  return sameDay ? `resets ${hm}` : `resets ${d.toLocaleDateString(language === 'system' ? undefined : language, { weekday: 'short' })} ${hm}`
 }
 const hoursLabel = (h: number) => (h < 1 ? `${Math.round(h * 60)}m` : `${h}h`)
 // The picker's options, with a hand-edited value kept in the list.
@@ -117,7 +125,7 @@ const cut = (s: string, n: number) => (s.length > n ? `${s.slice(0, Math.max(1, 
 // A value missing, mistyped or out of range falls back to its default.
 function cleanPrefs(raw: unknown): Prefs {
   const r = (raw && typeof raw === 'object' ? raw : {}) as Record<string, unknown>
-  const num = (k: keyof Prefs, lo: number, hi: number) => {
+  const num = (k: 'keepWarmHours' | 'pingMinutesBefore' | 'oversizedTokens', lo: number, hi: number) => {
     const v = Number(r[k])
     return Number.isFinite(v) && v >= lo && v <= hi ? v : DEFAULTS[k]
   }
@@ -125,6 +133,7 @@ function cleanPrefs(raw: unknown): Prefs {
     keepWarmHours: num('keepWarmHours', 0.25, 24),
     pingMinutesBefore: num('pingMinutesBefore', 1, 30),
     oversizedTokens: num('oversizedTokens', 10_000, 1_000_000),
+    language: LANGUAGES.some(l => l.value === r.language) ? String(r.language) : DEFAULTS.language,
   }
 }
 
@@ -341,15 +350,19 @@ export const register: Register = on => {
     const limits = (u?.limits ?? []).map(l => ({
       text: `${l.kind === 'five_hour' ? '5h' : l.kind === 'seven_day' ? 'week' : limitName(l.kind)} ${Math.round(l.percentUsed)}%`,
       color: l.percentUsed >= 90 ? 'error' : l.percentUsed >= 70 ? 'warning' : undefined,
+      // Critical: close enough to the limit to plan around.
+      bold: l.percentUsed >= 85,
     }))
 
     const big = ctx > p.oversizedTokens
+    // Critical from 75% of the window: Claude Code compacts on its own near the end.
+    const ctxPct = u?.window ? Math.round((ctx / u.window) * 100) : 0
     const lc = await read($, lastCompact)
 
     // The second row's figures, most useful first: a narrow band cuts from the end.
     const week = u?.limits.find(l => l.kind === 'seven_day')
     const extras = [
-      week?.resetsAt ? `week ${resets(week.resetsAt)}` : '',
+      week?.resetsAt ? `week ${resets(week.resetsAt, p.language)}` : '',
       mine && mine.calls ? `tab ${usd(mine.cost)} (${usd(mine.cost / mine.calls)}/msg)` : '',
       mine && mine.subagents
         ? `${mine.subagents} subagent${mine.subagents > 1 ? 's' : ''} ${usd(mine.sub_cost)}, kept ${tok(mine.sub_kept)} out`
@@ -367,11 +380,14 @@ export const register: Register = on => {
           <Box flexGrow={1} flexShrink={1} minWidth={0} overflow="hidden">
             <Text size="caption" wrap="truncate-end">
               {limits.map((l, i) => (
-                <Text color={l.color} dimColor={!l.color}>{`${i ? ' · ' : ''}${l.text}`}</Text>
+                <Text color={l.color} dimColor={!l.color}>
+                  {i ? ' · ' : ''}
+                  <Text bold={l.bold}>{l.text}</Text>
+                </Text>
               ))}
               {limits.length ? <Text dimColor>{'  │  '}</Text> : ''}
-              <Text color={big ? 'warning' : undefined} dimColor={!big}>
-                {`context ${tok(ctx)}${u?.window ? ` (${Math.round((ctx / u.window) * 100)}%)` : ''}${big ? ' oversized' : ''}`}
+              <Text color={big ? 'warning' : undefined} dimColor={!big} bold={ctxPct >= 75}>
+                {`context ${tok(ctx)}${u?.window ? ` (${ctxPct}%)` : ''}${big ? ' oversized' : ''}`}
               </Text>
               <Text dimColor>{' · '}</Text>
               {left > 0 ? (
@@ -470,6 +486,19 @@ export const register: Register = on => {
             onSelect={v => void savePrefs($, { oversizedTokens: Number(v) })}
           />
           <Text dimColor size="caption">The Handoff button shows past this size, and the context turns yellow.</Text>
+        </Box>
+        <Box flexDirection="column">
+          <Text weight="semibold">Language</Text>
+          <Select
+            key="set-language"
+            label="Weekdays in "
+            options={LANGUAGES}
+            value={p.language}
+            onSelect={v => void savePrefs($, { language: v })}
+          />
+          <Text dimColor size="caption">Pick the one your Claude app uses.</Text>
+        </Box>
+        <Box flexDirection="column">
           <Text size="caption">{`Documents to update: ${DOCS_FILE} in this project`}</Text>
           <Button
             key="edit-docs"
@@ -516,7 +545,7 @@ export const register: Register = on => {
                   <Text color={l.percentUsed >= 90 ? 'error' : l.percentUsed >= 70 ? 'warning' : 'success'}>{bar(l.percentUsed, barW)}</Text>
                   {` ${Math.round(l.percentUsed)}% ${limitName(l.kind)}`}
                 </Text>
-                <Text dimColor size="caption">{resets(l.resetsAt)}</Text>
+                <Text dimColor size="caption">{resets(l.resetsAt, p.language)}</Text>
               </Box>
             ))}
           </Box>

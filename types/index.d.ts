@@ -39,6 +39,7 @@ export type Prefs = {
   keepWarmHours: number
   pingMinutesBefore: number
   oversizedTokens: number
+  language: string
 }
 
 declare module 'claude-code' {

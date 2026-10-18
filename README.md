@@ -9,8 +9,8 @@ week resets Mon 09:00 · tab $37.75 ($0.13/msg) · 3 subagents $0.40, kept 120k 
 
 Two rows that keep their size. A figure that runs out of room is cut at the row's end, least useful last, instead of making the band taller.
 
-- **5h / week**: your plan's usage limits (yellow from 70%, red from 90%).
-- **context**: how much this conversation carries, and that as a share of the model's window (where Claude Code compacts on its own); it turns yellow and says *oversized* past a limit you set.
+- **5h / week**: your plan's usage limits (yellow from 70%, bold from 85%, red from 90%).
+- **context**: how much this conversation carries, and that as a share of the model's window (where Claude Code compacts on its own); it turns yellow and says *oversized* past a limit you set, and bold from 75% of the window.
 - **cache**: how long this tab's prompt cache stays alive. Every message rereads the whole conversation: cheap while the cache is alive, a full rebuild once it expires.
 - **reread**: what the next message costs to read the conversation back in, warm or cold.
 - **today**: spend across all your tabs today.
@@ -27,7 +27,7 @@ Dollar figures are what the same tokens would cost at Anthropic's API list price
 - **Handoff** (bright once the tab is oversized, dim before) and **`/handoff`**: asks Claude to update your project's documents and write a handoff note, so you can start a fresh tab.
 - **`/compact`**: updates the documents first, then compacts. `/compact skip-docs` compacts straight away.
 - **Tabs** or **`/tokens`**: a panel with your plan limits, this tab, and your other recent tabs.
-- **⚙**: settings (Keep warm length, ping timing, the oversized limit, the document list).
+- **⚙**: settings (Keep warm length, ping timing, the oversized limit, the document list, and the language for weekdays; pick the one your Claude app uses).
 
 ## Which documents get updated
 
