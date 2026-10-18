@@ -25,7 +25,7 @@ test('before any data, the panel draws this tab and the dashboard link', async (
   }
 })
 
-test('the band above the prompt is one row with a Tabs button', async ($, on) => {
+test('the band draws the same controls whatever its state', async ($, on) => {
   on('clock.now', () => ({ value: 1_760_000_000_000 }))
   for (const surface of ['terminal', 'desktop'] as const) {
     const ui = await $.ui.mount({
@@ -54,7 +54,7 @@ test('Keep warm switches on from the band and Stop switches it off', async ($, o
   })
   await ui.press({ key: 'keepwarm' })
   expect(await ui.find({ type: 'Text', text: /warm ×0 till/ })).toBeDefined()
-  await ui.press({ key: 'stopwarm' })
+  await ui.press({ key: 'keepwarm' })
   expect(await ui.find({ key: 'keepwarm' })).toBeDefined()
   await ui.unmount()
 })

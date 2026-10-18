@@ -86,7 +86,7 @@ const tok = (v: number) =>
   v >= 1e6 ? `${(v / 1e6).toFixed(1)}M` : v >= 1e3 ? `${Math.round(v / 1e3)}k` : String(v)
 const clock = (s: number) => {
   const t = Math.max(0, Math.floor(s))
-  return `${Math.floor(t / 60)}:${String(t % 60).padStart(2, '0')}`
+  return `${String(Math.floor(t / 60)).padStart(2, "0")}:${String(t % 60).padStart(2, "0")}`
 }
 const bar = (pct: number, width: number) => {
   const n = Math.max(0, Math.min(width, Math.round((pct / 100) * width)))
@@ -330,56 +330,78 @@ export const register: Register = on => {
       color: l.percentUsed >= 90 ? 'error' : l.percentUsed >= 70 ? 'warning' : undefined,
     }))
 
+    const big = ctx > p.oversizedTokens
+
+    // Two rows that never change shape: the figures on the first, the
+    // controls on the second, every control always drawn. Each text sits in a
+    // box that may shrink, so a long figure is cut at the row's end instead of
+    // wrapping and making the band taller.
     return (
-      <Box flexDirection="row" gap="sm" alignItems="center">
-        <Text size="caption" wrap="truncate-end">
-          {limits.map((l, i) => (
-            <Text color={l.color} dimColor={!l.color}>{`${i ? ' · ' : ''}${l.text}`}</Text>
-          ))}
-          {limits.length ? <Text dimColor>{'  │  '}</Text> : ''}
-          <Text color={ctx > p.oversizedTokens ? 'warning' : undefined} dimColor={ctx <= p.oversizedTokens}>
-            {`context ${tok(ctx)}${ctx > p.oversizedTokens ? ' oversized' : ''}`}
-          </Text>
-          <Text dimColor>{' · '}</Text>
-          {left > 0 ? (
-            <Text color={left < 60 ? 'warning' : 'success'} tabular>{`cache ${clock(left)}`}</Text>
-          ) : (
-            <Text dimColor>{last ? 'cache expired' : 'cache –'}</Text>
-          )}
-          {mine ? <Text dimColor tabular>{` · reread ${usd(left > 0 ? mine.reread_warm : mine.reread_cold)}`}</Text> : ''}
-          {s ? <Text dimColor tabular>{`  │  ${usd(s.today)} today`}</Text> : ''}
-          {err ? <Text color="warning">{'  │  ⚠ no tab data (see Tabs)'}</Text> : ''}
-          {w ? <Text color="success" tabular>{`  │  warm ×${w.pings} till ${hm(w.until)}`}</Text> : ''}
-        </Text>
-        {w ? (
-          <Button key="stopwarm" label="Stop" onPress={() => void update($, warm, () => null)} />
-        ) : (
-          <Box flexDirection="row" gap="xs" alignItems="center">
-            <Button
-              key="keepwarm"
-              label="Keep warm"
-              onPress={async () => {
-                const t = (await $.clock.now()) / 1000
-                await update($, warm, () => ({ until: t + p.keepWarmHours * 3600, pings: 0 }))
-              }}
-            />
-            <Select
-              key="warmhours"
-              options={choices(CHOICES.keepWarmHours, p.keepWarmHours, hoursLabel)}
-              value={String(p.keepWarmHours)}
-              onSelect={v => void savePrefs($, { keepWarmHours: Number(v) })}
-            />
+      <Box flexDirection="column">
+        <Box flexDirection="row">
+          <Box flexGrow={1} flexShrink={1} minWidth={0} overflow="hidden">
+            <Text size="caption" wrap="truncate-end">
+              {limits.map((l, i) => (
+                <Text color={l.color} dimColor={!l.color}>{`${i ? ' · ' : ''}${l.text}`}</Text>
+              ))}
+              {limits.length ? <Text dimColor>{'  │  '}</Text> : ''}
+              <Text color={big ? 'warning' : undefined} dimColor={!big}>
+                {`context ${tok(ctx)}${big ? ' oversized' : ''}`}
+              </Text>
+              <Text dimColor>{' · '}</Text>
+              {left > 0 ? (
+                <Text color={left < 60 ? 'warning' : 'success'} tabular>{`cache ${clock(left)}`}</Text>
+              ) : (
+                <Text dimColor>{last ? 'cache expired' : 'cache –'}</Text>
+              )}
+              {mine ? <Text dimColor tabular>{` · reread ${usd(left > 0 ? mine.reread_warm : mine.reread_cold)}`}</Text> : ''}
+              {s ? <Text dimColor tabular>{`  │  ${usd(s.today)} today`}</Text> : ''}
+            </Text>
           </Box>
-        )}
-        {ctx > p.oversizedTokens && (
-          <Button key="handoff" label="Handoff" onPress={() => void $.command.run({ command: 'handoff', args: '' })} />
-        )}
-        <Button key="tabs" label="Tabs" onPress={() => void $.ui.open({ id: PANE, title: TITLE, columns: 40 })} />
-        <Button
-          key="settings"
-          label="⚙"
-          onPress={() => void $.ui.open({ id: SETTINGS_PANE, title: 'Token panel settings', columns: 44 })}
-        />
+        </Box>
+        <Box flexDirection="row" gap="xs" alignItems="center">
+          <Button
+            key="keepwarm"
+            label={w ? 'Stop warm' : 'Keep warm'}
+            onPress={async () => {
+              if (w) {
+                await update($, warm, () => null)
+                return
+              }
+              const t = (await $.clock.now()) / 1000
+              await update($, warm, () => ({ until: t + p.keepWarmHours * 3600, pings: 0 }))
+            }}
+          />
+          <Select
+            key="warmhours"
+            options={choices(CHOICES.keepWarmHours, p.keepWarmHours, hoursLabel)}
+            value={String(p.keepWarmHours)}
+            onSelect={async v => {
+              await savePrefs($, { keepWarmHours: Number(v) })
+              // A new length while warm counts from now.
+              const t = (await $.clock.now()) / 1000
+              await update($, warm, cur => (cur ? { ...cur, until: t + Number(v) * 3600 } : cur))
+            }}
+          />
+          <Button
+            key="handoff"
+            label="Handoff"
+            dimColor={!big}
+            onPress={() => void $.command.run({ command: 'handoff', args: '' })}
+          />
+          <Button key="tabs" label="Tabs" onPress={() => void $.ui.open({ id: PANE, title: TITLE, columns: 40 })} />
+          <Button
+            key="settings"
+            label="⚙"
+            onPress={() => void $.ui.open({ id: SETTINGS_PANE, title: 'Token panel settings', columns: 44 })}
+          />
+          <Box flexGrow={1} flexShrink={1} minWidth={0} overflow="hidden">
+            <Text size="caption" wrap="truncate-end">
+              {w ? <Text color="success" tabular>{`warm ×${w.pings} till ${hm(w.until)}`}</Text> : ''}
+              {err ? <Text color="warning">{`${w ? '  │  ' : ''}⚠ no tab data (see Tabs)`}</Text> : ''}
+            </Text>
+          </Box>
+        </Box>
       </Box>
     )
   })

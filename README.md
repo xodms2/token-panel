@@ -1,10 +1,13 @@
 # Token panel for Claude Code
 
-One line above the message box that shows, for the tab you're in:
+Two rows above the message box that show, for the tab you're in:
 
 ```
-5h 5% · week 87%  │  context 70k · cache 59:37 · reread $0.03  │  $10.42 today   [Keep warm][3h ▾]  [Tabs]  [⚙]
+5h 5% · week 87%  │  context 70k · cache 59:37 · reread $0.03  │  $10.42 today
+[Keep warm] [3h ▾] [Handoff] [Tabs] [⚙]   warm ×1 till 14:30
 ```
+
+Two rows that keep their size: the figures on top, the controls below.
 
 - **5h / week**: your plan's usage limits (yellow from 70%, red from 90%).
 - **context**: how much this conversation carries; it turns yellow and says *oversized* past a limit you set.
@@ -16,8 +19,8 @@ Dollar figures are what the same tokens would cost at Anthropic's API list price
 
 ## Buttons
 
-- **Keep warm [3h ▾]**: while on, sends one tiny message ("reply ok") a few minutes before the cache would expire, for as long as you pick. It never pings a tab that is already cold. Each ping shows in the conversation and counts a little toward your plan.
-- **Handoff** (shows when the tab is oversized) and **`/handoff`**: asks Claude to update your project's documents and write a handoff note, so you can start a fresh tab.
+- **Keep warm [3h ▾]** (**Stop warm** while on): while on, sends one tiny message ("reply ok") a few minutes before the cache would expire, for as long as you pick. It never pings a tab that is already cold. Each ping shows in the conversation and counts a little toward your plan.
+- **Handoff** (bright once the tab is oversized, dim before) and **`/handoff`**: asks Claude to update your project's documents and write a handoff note, so you can start a fresh tab.
 - **`/compact`**: updates the documents first, then compacts. `/compact skip-docs` compacts straight away.
 - **Tabs** or **`/tokens`**: a panel with your plan limits, this tab, and your other recent tabs.
 - **⚙**: settings (Keep warm length, ping timing, the oversized limit, the document list).
