@@ -136,3 +136,70 @@ test('the Handoff button starts the handoff itself, not through /handoff', async
   expect(sent[0]).toContain('handoff.md')
   await ui.unmount()
 })
+
+const turnEnd = (extra: Record<string, unknown> = {}) =>
+  ({ answer: 'done', durationMs: 1, isAborted: false, turnId: 't1', reason: 'answer', ...extra }) as never
+
+function compactKit(on: Parameters<Parameters<typeof test>[1]>[1], failures = 0) {
+  const calls = { compact: 0, logs: [] as string[] }
+  on('prompt.submit', (_$, e) => ({ text: e.text }))
+  on('turn.complete', () => ({ text: 'done' }))
+  on('fs.read', () => ({ value: '- docs/11_journal.md' }) as never)
+  on('ui.log', (_$, e) => {
+    calls.logs.push(String((e as { text: string }).text))
+    return { value: undefined } as never
+  })
+  on('session.compact', () => {
+    calls.compact++
+    if (calls.compact <= failures) throw new Error('a turn is running')
+    return { messages: [{ role: 'user', text: 'summary', toolUses: [] }], tokensBefore: 500_000, tokensAfter: 40_000 } as never
+  })
+  return calls
+}
+
+test('/compact compacts when the docs turn ends, not when a subagent turn does', async ($, on) => {
+  const clock = mock.clock(on)
+  const calls = compactKit(on)
+  await $.command.run({ command: 'compact', args: '', origin: { kind: 'composer' } } as never)
+  await clock.advance(20)
+  await $.turn.complete(turnEnd({ agentId: 'sub-1' }))
+  await clock.advance(20)
+  expect(calls.compact).toBe(0)
+  await $.turn.complete(turnEnd())
+  await clock.advance(20)
+  expect(calls.compact).toBe(1)
+})
+
+test('a compaction refused while the session is busy is tried again', async ($, on) => {
+  const clock = mock.clock(on)
+  const calls = compactKit(on, 2)
+  await $.command.run({ command: 'compact', args: '', origin: { kind: 'composer' } } as never)
+  await clock.advance(20)
+  await $.turn.complete(turnEnd())
+  await clock.advance(20)
+  expect(calls.compact).toBe(1)
+  await clock.advance(5000)
+  expect(calls.compact).toBe(3)
+  expect(calls.logs).toEqual([])
+})
+
+test('a compaction that never runs says so in the transcript', async ($, on) => {
+  const clock = mock.clock(on)
+  const calls = compactKit(on, 1000)
+  await $.command.run({ command: 'compact', args: '', origin: { kind: 'composer' } } as never)
+  await clock.advance(20)
+  await $.turn.complete(turnEnd())
+  await clock.advance(120_000)
+  expect(calls.compact).toBe(30)
+  expect(calls.logs.at(-1)).toContain('/compact skip-docs')
+})
+
+test('an interrupted docs turn compacts nothing', async ($, on) => {
+  const clock = mock.clock(on)
+  const calls = compactKit(on)
+  await $.command.run({ command: 'compact', args: '', origin: { kind: 'composer' } } as never)
+  await clock.advance(20)
+  await $.turn.complete(turnEnd({ reason: 'aborted', isAborted: true }))
+  await clock.advance(5000)
+  expect(calls.compact).toBe(0)
+})

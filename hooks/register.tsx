@@ -172,6 +172,25 @@ let compactAfter: string | null = null
 // True once the docs were updated and nobody has said anything since.
 let docsFresh = false
 
+// The engine refuses a compaction while a turn runs, and the docs turn may not
+// have let go yet when its end is heard: try again until the session is idle.
+const COMPACT_RETRY_MS = 2000
+const COMPACT_TRIES = 30
+
+async function compactWhenIdle($: EngineInterface, instructions: string, tries = 1) {
+  try {
+    const done = await $.session.compact(instructions ? { instructions } : undefined)
+    if ('skip' in done && done.skip) $.ui.log(`token-panel: the compaction was skipped: ${done.skip}`)
+  } catch (err) {
+    if (tries < COMPACT_TRIES) {
+      $.clock.after(COMPACT_RETRY_MS, () => void compactWhenIdle($, instructions, tries + 1))
+      return
+    }
+    const why = err instanceof Error ? err.message : String(err)
+    $.ui.log(`token-panel: the compaction did not run (${why}). Type /compact skip-docs to compact now.`)
+  }
+}
+
 async function docsPrompt($: EngineInterface, then: string) {
   let list = ''
   try {
@@ -336,15 +355,19 @@ export const register: Register = on => {
 
   on('turn.complete', async ($, e, next) => {
     const ran = await next(e)
+    // A subagent's turn ends inside the main one: it is not the turn we wait on.
+    if (e.agentId) return ran
     const now = await $.clock.now()
     await update($, lastReply, () => now / 1000)
     const kind = pending
     pending = null
-    if (kind === 'docs' || kind === 'handoff') docsFresh = true
+    const answered = e.reason === 'answer'
+    if (answered && (kind === 'docs' || kind === 'handoff')) docsFresh = true
     if (kind === 'docs' && compactAfter !== null) {
       const instructions = compactAfter
       compactAfter = null
-      $.clock.after(10, () => void $.session.compact(instructions ? { instructions } : undefined))
+      // An interrupted or failed docs turn leaves the conversation as it is.
+      if (answered) $.clock.after(10, () => void compactWhenIdle($, instructions))
     }
     void refresh($)
 
