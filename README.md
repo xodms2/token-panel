@@ -26,7 +26,7 @@ Dollar figures are what the same tokens would cost at Anthropic's API list price
 
 - **Keep warm [3h ▾]**: while on, the button turns into **Warm: 14:30** (press it to stop), and it sends one tiny message ("reply ok") a few minutes before the cache would expire, for as long as you pick. It never pings a tab that is already cold. Each ping shows in the conversation and counts a little toward your plan.
 - **Handoff** (bright once the tab is oversized, dim before) and **`/handoff`**: asks Claude to update your project's documents and write a handoff note, so you can start a fresh tab.
-- **`/compact`**: updates the documents first, then compacts. `/compact skip-docs` compacts straight away.
+- **`/compact-docs`**: updates the documents first, then compacts. Claude Code's own `/compact` is untouched and compacts straight away.
 - **Tabs** or **`/tokens`**: a panel with your plan limits, this tab, and your other recent tabs.
 - **⚙**: settings (Keep warm length, ping timing, the oversized limit, the document list, and the language for weekdays; pick the one your Claude app uses).
 

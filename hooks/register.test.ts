@@ -59,7 +59,7 @@ test('Keep warm switches on from the band and Stop switches it off', async ($, o
   await ui.unmount()
 })
 
-test('a typed /compact sends the doc update first and compacts nothing yet', async ($, on) => {
+test('/compact-docs sends the doc update first and compacts nothing yet', async ($, on) => {
   const clock = mock.clock(on)
   const sent: string[] = []
   let compacted = false
@@ -67,12 +67,12 @@ test('a typed /compact sends the doc update first and compacts nothing yet', asy
     sent.push(e.text)
     return { text: e.text }
   })
-  on('command.run', { command: 'compact' }, () => {
+  on('session.compact', () => {
     compacted = true
-    return { text: 'compacted' }
+    return { skip: 'test' } as never
   })
   on('fs.read', () => ({ value: '- docs/11_journal.md' }) as never)
-  const out = await $.command.run({ command: 'compact', args: '', origin: { kind: 'composer' } } as never)
+  const out = await $.command.run({ command: 'compact-docs', args: '', origin: { kind: 'composer' } } as never)
   expect(compacted).toBe(false)
   await clock.advance(20)
   expect(out.text).toContain('docs first')
@@ -157,10 +157,10 @@ function compactKit(on: Parameters<Parameters<typeof test>[1]>[1], failures = 0)
   return calls
 }
 
-test('/compact compacts when the docs turn ends, not when a subagent turn does', async ($, on) => {
+test('/compact-docs compacts when the docs turn ends, not when a subagent turn does', async ($, on) => {
   const clock = mock.clock(on)
   const calls = compactKit(on)
-  await $.command.run({ command: 'compact', args: '', origin: { kind: 'composer' } } as never)
+  await $.command.run({ command: 'compact-docs', args: '', origin: { kind: 'composer' } } as never)
   await clock.advance(20)
   await $.turn.complete(turnEnd({ agentId: 'sub-1' }))
   await clock.advance(20)
@@ -173,7 +173,7 @@ test('/compact compacts when the docs turn ends, not when a subagent turn does',
 test('a compaction refused while the session is busy is tried again', async ($, on) => {
   const clock = mock.clock(on)
   const calls = compactKit(on, 2)
-  await $.command.run({ command: 'compact', args: '', origin: { kind: 'composer' } } as never)
+  await $.command.run({ command: 'compact-docs', args: '', origin: { kind: 'composer' } } as never)
   await clock.advance(20)
   await $.turn.complete(turnEnd())
   await clock.advance(20)
@@ -186,20 +186,30 @@ test('a compaction refused while the session is busy is tried again', async ($, 
 test('a compaction that never runs says so in the transcript', async ($, on) => {
   const clock = mock.clock(on)
   const calls = compactKit(on, 1000)
-  await $.command.run({ command: 'compact', args: '', origin: { kind: 'composer' } } as never)
+  await $.command.run({ command: 'compact-docs', args: '', origin: { kind: 'composer' } } as never)
   await clock.advance(20)
   await $.turn.complete(turnEnd())
   await clock.advance(120_000)
   expect(calls.compact).toBe(30)
-  expect(calls.logs.at(-1)).toContain('/compact skip-docs')
+  expect(calls.logs.at(-1)).toContain('Type /compact')
 })
 
 test('an interrupted docs turn compacts nothing', async ($, on) => {
   const clock = mock.clock(on)
   const calls = compactKit(on)
-  await $.command.run({ command: 'compact', args: '', origin: { kind: 'composer' } } as never)
+  await $.command.run({ command: 'compact-docs', args: '', origin: { kind: 'composer' } } as never)
   await clock.advance(20)
   await $.turn.complete(turnEnd({ reason: 'aborted', isAborted: true }))
   await clock.advance(5000)
   expect(calls.compact).toBe(0)
+})
+
+test('/compact is left to Claude Code', async ($, on) => {
+  let core = false
+  on('command.run', { command: 'compact' }, () => {
+    core = true
+    return { text: 'compacted' }
+  })
+  await $.command.run({ command: 'compact', args: '', origin: { kind: 'composer' } } as never)
+  expect(core).toBe(true)
 })

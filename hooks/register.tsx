@@ -187,7 +187,7 @@ async function compactWhenIdle($: EngineInterface, instructions: string, tries =
       return
     }
     const why = err instanceof Error ? err.message : String(err)
-    $.ui.log(`token-panel: the compaction did not run (${why}). Type /compact skip-docs to compact now.`)
+    $.ui.log(`token-panel: the compaction did not run (${why}). Type /compact to compact without the docs.`)
   }
 }
 
@@ -299,6 +299,7 @@ export const register: Register = on => {
     await initPaths($)
     await $.command.register({ name: 'tokens', description: 'Open the token panel with every tab' })
     await $.command.register({ name: 'handoff', description: 'Update the project docs and write a handoff note' })
+    await $.command.register({ name: 'compact-docs', description: 'Update the project docs, then compact' })
     void refresh($)
     $.clock.every(5000, () => void refresh($))
     $.clock.every(15_000, () => void keepWarm($))
@@ -316,23 +317,21 @@ export const register: Register = on => {
 
   on('command.run', { command: 'handoff' }, async $ => ({ text: await startHandoff($) }))
 
-  // /compact updates the docs first, then compacts when that turn ends.
-  // `/compact skip-docs` compacts at once; so does a /compact right after an
-  // update, and one a plugin runs (the person's own typing is never 'plugin').
-  on('command.run', { command: 'compact' }, async ($, e, next) => {
+  // /compact-docs updates the docs first, then compacts when that turn ends;
+  // right after an update it compacts at once. Claude Code's own /compact is
+  // left as it is, to compact without the docs.
+  on('command.run', { command: 'compact-docs' }, async ($, e) => {
     const args = e.args.trim()
-    const skip = /^skip-docs\b/.test(args)
-    if (e.origin.kind === 'plugin' || docsFresh || skip) {
-      return next({ ...e, args: args.replace(/^skip-docs\b\s*/, '') })
+    if (docsFresh) {
+      $.clock.after(10, () => void compactWhenIdle($, args))
+      return { text: 'The docs are current; compacting now.' }
     }
     compactAfter = args
     pending = 'docs'
     const text = await docsPrompt($, COMPACT_THEN)
     $.clock.after(10, () => void $.prompt.submit({ text }))
 
-    return {
-      text: 'Updating the project docs first; the compaction runs when that turn ends. (/compact skip-docs compacts right away.)',
-    }
+    return { text: 'Updating the project docs first; the compaction runs when that turn ends.' }
   })
 
   // Remembers how much the last compaction took off, for the band.
